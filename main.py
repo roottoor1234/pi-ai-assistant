@@ -1,9 +1,9 @@
 import time
+import threading
+import tkinter as tk
 import azure.cognitiveservices.speech as speechsdk
 from google import genai
 from google.genai import types
-import tkinter as tk
-import threading
 
 # === Azure Credentials ===
 AZURE_SPEECH_KEY = "2Vji5jcQETXZ5Mo8x8Ruvjt5sTpjvgmfkWcVGv7DfoejKsBcW3wHJQQJ99BDAC5RqLJXJ3w3AAAYACOG2cxY"
@@ -75,7 +75,7 @@ def ask_gemini(history):
 
     response_chunks = genai_client.models.generate_content_stream(
         model="gemini-2.5-flash-lite",
-        contents=history,  # μόνο user/model ρόλοι
+        contents=history,
         config=generate_content_config,
     )
 
@@ -86,21 +86,14 @@ def ask_gemini(history):
 
     return full_response.strip()
 
-
 # === Text-to-Speech ===
-def speak_with_azure_tts(ssml_text, visualizer=None):
+def speak_with_azure_tts(ssml_text):
     speech_config = speechsdk.SpeechConfig(subscription=AZURE_SPEECH_KEY, region=AZURE_REGION)
     audio_config = speechsdk.audio.AudioOutputConfig(use_default_speaker=True)
     synthesizer = speechsdk.SpeechSynthesizer(speech_config=speech_config, audio_config=audio_config)
 
     print("🔈 Μιλάει ο SmartBot...")
-    if visualizer:
-        visualizer.start()
-
     result = synthesizer.speak_ssml_async(ssml_text).get()
-
-    if visualizer:
-        visualizer.stop()
 
     if result.reason == speechsdk.ResultReason.SynthesizingAudioCompleted:
         print("✅ Αναπαραγωγή ολοκληρώθηκε")
@@ -110,13 +103,44 @@ def speak_with_azure_tts(ssml_text, visualizer=None):
         if cancellation.reason == speechsdk.CancellationReason.Error:
             print("Σφάλμα:", cancellation.error_details)
 
+# === Speaking Visualizer ===
+class SpeakingVisualizer:
+    def __init__(self, root):
+        self.root = root
+        self.canvas = tk.Canvas(self.root, width=200, height=100, bg="black", highlightthickness=0)
+        self.canvas.pack()
+        self.dots = [
+            self.canvas.create_oval(30, 40, 50, 60, fill="gray"),
+            self.canvas.create_oval(80, 40, 100, 60, fill="gray"),
+            self.canvas.create_oval(130, 40, 150, 60, fill="gray")
+        ]
+        self.animating = False
 
-# === Main Loop ===
-def main():
+    def start(self):
+        self.animating = True
+        self.animate()
+
+    def stop(self):
+        self.animating = False
+        for dot in self.dots:
+            self.canvas.itemconfig(dot, fill="gray")
+
+    def animate(self):
+        if not self.animating:
+            return
+        for i in range(3):
+            if not self.animating:
+                return
+            self.canvas.itemconfig(self.dots[i], fill="white")
+            self.root.update()
+            time.sleep(0.2)
+            self.canvas.itemconfig(self.dots[i], fill="gray")
+        self.root.after(100, self.animate)
+
+# === SmartBot Conversation Loop ===
+def smartbot_loop(visualizer):
     history = []
-    visualizer = SpeakingVisualizer()
-
-    print("🤖 Ο SmartBot είναι έτοιμος. Πες 'τέλος' ή 'σταμάτα' για να τερματίσεις τον διάλογο.\n")
+    print("🤖 Ο SmartBot είναι έτοιμος. Πες 'τέλος' για έξοδο.\n")
 
     while True:
         query = recognize_speech()
@@ -128,65 +152,27 @@ def main():
             print("👋 Αντίο!")
             break
 
-        # Προσθήκη ερώτησης στο ιστορικό
-        history.append(
-            types.Content(
-                role="user",
-                parts=[types.Part.from_text(text=query)]
-            )
-        )
-
-        # Λήψη απάντησης από το Gemini
+        history.append(types.Content(role="user", parts=[types.Part.from_text(text=query)]))
         answer = ask_gemini(history)
         print("🤖 Απάντηση SSML:\n", answer)
+        history.append(types.Content(role="model", parts=[types.Part.from_text(text=answer)]))
 
-        # Προσθήκη απάντησης στο ιστορικό
-        history.append(
-            types.Content(
-                role="model",
-                parts=[types.Part.from_text(text=answer)]
-            )
-        )
+        visualizer.start()
+        speak_with_azure_tts(answer)
+        visualizer.stop()
+        time.sleep(1)
 
-        # Ομιλία με Azure TTS
-        speak_with_azure_tts(answer, visualizer)
+# === Main App Entry Point ===
+def main():
+    root = tk.Tk()
+    root.title("SmartBot Speaking")
+    root.geometry("200x100")
+    root.configure(bg="black")
 
-        time.sleep(1.5)  # Μικρή παύση πριν τον επόμενο γύρο
+    visualizer = SpeakingVisualizer(root)
+    threading.Thread(target=smartbot_loop, args=(visualizer,), daemon=True).start()
 
-class SpeakingVisualizer:
-    def __init__(self):
-        self.root = tk.Tk()
-        self.root.title("SmartBot Speaking")
-        self.root.geometry("200x100")
-        self.root.configure(bg="black")
-        self.canvas = tk.Canvas(self.root, width=200, height=100, bg="black", highlightthickness=0)
-        self.canvas.pack()
-        self.dots = [
-            self.canvas.create_oval(30, 40, 50, 60, fill="gray"),
-            self.canvas.create_oval(80, 40, 100, 60, fill="gray"),
-            self.canvas.create_oval(130, 40, 150, 60, fill="gray")
-        ]
-        self.animating = False
-
-        # Ξεκινά το Tkinter loop σε background thread
-        threading.Thread(target=self.root.mainloop, daemon=True).start()
-
-    def start(self):
-        self.animating = True
-        threading.Thread(target=self.animate, daemon=True).start()
-
-    def stop(self):
-        self.animating = False
-        for dot in self.dots:
-            self.canvas.itemconfig(dot, fill="gray")
-
-    def animate(self):
-        while self.animating:
-            for i in range(3):
-                self.canvas.itemconfig(self.dots[i], fill="white")
-                time.sleep(0.2)
-                self.canvas.itemconfig(self.dots[i], fill="gray")
-            time.sleep(0.1)
+    root.mainloop()
 
 if __name__ == "__main__":
     main()
