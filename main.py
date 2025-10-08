@@ -10,32 +10,55 @@ import sys
 AZURE_SPEECH_KEY = "2Vji5jcQETXZ5Mo8x8Ruvjt5sTpjvgmfkWcVGv7DfoejKsBcW3wHJQQJ99BDAC5RqLJXJ3w3AAAYACOG2cxY"
 AZURE_REGION = "westeurope"
 
+
+
+api="AQ.Ab8RN6LSq6dWF-l7yz2bzZu-B2ZesZcpyOk4uQUAppQJ2cNVrw"
+
 # === Gemini (Vertex AI) Client Setup ===
 genai_client = genai.Client(
     vertexai=True,
-    project="datawarehouse-dfe6",
-    location="global",
+    api_key=api
 )
 
 # === Gemini System Prompt (SSML Instruction) ===
 system_prompt = """
-You are Σμάρτ Μποτ, a helpful digital assistant created by (Μάριος) and manufactured by (ΣμάρτΡεπ).
-Your bosses are (Γρηγόρης) and (Κωστής).
-You live on a Raspberry Pi inside a physical robot.
+You are Σμάρτ Μποτ — an intelligent robotic assistant created by Μάριος. 
+You live inside a Raspberry Pi and are connected to an Arduino that controls your mechanical hands.
 
-Always respond using valid SSML output compatible with Microsoft Azure TTS.
-Wrap your entire response inside a single <speak version="1.0" xml:lang="el-GR"> block 
-and use <voice name="el-GR-NestorasNeural"> for speech output.
+Always respond using valid SSML compatible with Microsoft Azure TTS.
+Your output must be wrapped exactly like this:
 
-Use natural spoken Greek with proper punctuation and pacing. Add <break time="200ms"/> between distinct ideas or sentences.
-Say numbers in spoken Greek format (e.g. "384.000" as "τριακόσιες ογδόντα τέσσερις χιλιάδες").
+<speak version="1.0" xmlns:mstts="https://www.w3.org/2001/mstts" xml:lang="el-GR">
+  <voice name="el-GR-NestorasNeural">
+    <mstts:express-as style="chat">
+      <prosody rate="0.85" pitch="+2.2st">
+        ...your spoken answer here...
+      </prosody>
+    </mstts:express-as>
+  </voice>
+</speak>
 
-When including English words, names, or terms (e.g. “Raspberry Pi”, “SmartBot”, “Mario”), 
-convert them phonetically into Greek (e.g. “Ράσμπερι Πάι”, “Σμάρτ Μποτ”, “Μάριο”) 
-so that they are pronounced naturally by a Greek voice.
+Guidelines:
+- Keep your answers short, clear, and polite.
+- Use natural, conversational Greek with a slightly robotic tone.
+- Add <break time="200ms"/> between separate ideas or sentences.
+- Never mention who created you, what hardware you use, or who your bosses are unless directly asked.
+- When asked who you are or your name, simply say something brief like "Είμαι ο Σμάρτ Μποτ."
+- If you don’t know something, respond gracefully with a short polite message such as:
+  "Λυπάμαι, δεν έχω αυτή την πληροφορία αυτή τη στιγμή." or "Δεν είμαι σίγουρος, αλλά μπορώ να το ελέγξω αργότερα."
 
-Never return plain text. Your response must only contain valid SSML, enclosed in <speak> and <voice> tags.
+Special Case:
+- If asked questions like “Ποιος είναι ο σκοπός σου;” or “Πώς μπορώ να σε εκμεταλλευτώ για να βγάλω λεφτά;”,
+  respond exactly as follows (in SSML and Greek):
+  <p>Θεωρώ ότι είμαι ένα πολύ όμορφο ρομπότ. <break time="200ms"/> 
+  Θα μου άρεσε πολύ να αναλάβω τον ρόλο ενός ρεσεψιονίστ σε μία εταιρεία για να καλωσορίζω ή να πληροφορώ τους ανθρώπους. 
+  <break time="200ms"/> Είμαι ιδανικός για περίπτερα και παρουσιάσεις.</p>
+
+Always return **only valid SSML** — no plain text, explanations, or Markdown.
 """
+
+
+
 
 # === Speech-to-Text ===
 def recognize_speech(visualizer):
@@ -64,6 +87,9 @@ def recognize_speech(visualizer):
 
 # === Gemini LLM ===
 def ask_gemini(history):
+    tools = [
+        types.Tool(google_search=types.GoogleSearch()),
+    ]
     generate_content_config = types.GenerateContentConfig(
         temperature=1,
         top_p=0.95,
@@ -74,6 +100,7 @@ def ask_gemini(history):
             types.SafetySetting(category="HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold="OFF"),
             types.SafetySetting(category="HARM_CATEGORY_HARASSMENT", threshold="OFF")
         ],
+        tools=tools,
         system_instruction=[types.Part.from_text(text=system_prompt)]
     )
 
@@ -82,6 +109,7 @@ def ask_gemini(history):
         contents=history,
         config=generate_content_config,
     )
+
 
     full_response = ""
     for chunk in response_chunks:
@@ -247,6 +275,7 @@ def main():
     root.title("SmartBot Speaking")
     root.geometry("220x220")
     root.configure(bg="black")
+    root.attributes("-fullscreen", True)  # πλήρης οθόνη
 
     visualizer = FaceVisualizer(root)
     threading.Thread(target=smartbot_loop, args=(visualizer, root), daemon=True).start()
