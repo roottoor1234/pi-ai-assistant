@@ -87,7 +87,7 @@ def recognize_speech(visualizer):
         return None
 
 # === Gemini LLM ===
-def ask_gemini(history):
+def ask_gemini(history, visualizer):
     tools = [
         types.Tool(google_search=types.GoogleSearch()),
     ]
@@ -388,9 +388,11 @@ def smartbot_loop(visualizer, root):
 
         history.append(types.Content(role="user", parts=[types.Part.from_text(text=query)]))
         visualizer.start_thinking()
-        answer = ask_gemini(history)
+        start_time = time.time()
+        answer = ask_gemini(history, visualizer)
+        elapsed = time.time() - start_time
         visualizer.stop_thinking()
-        print("🤖 Απάντηση SSML:\n", answer)
+        print(f"🤖 Απάντηση SSML:\n {answer}\n⏱️ Χρόνος απόκρισης: {elapsed:.2f} δευτερόλεπτα")
         history.append(types.Content(role="model", parts=[types.Part.from_text(text=answer)]))
 
         visualizer.start_speaking()
