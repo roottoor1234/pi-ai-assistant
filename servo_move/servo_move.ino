@@ -24,16 +24,15 @@ void loop() {
     int servoNum = Serial.parseInt(); // Πρώτος αριθμός: ποιο servo
     int angle = Serial.parseInt();    // Δεύτερος αριθμός: γωνία
 
-    if (servoNum == 1 && angle >= 0 && angle <= 180) {
-      servo1.write(angle);
-      Serial.print("Servo1 moved to: ");
-      Serial.println(angle);
+    if (servoNum == 1 && angle >= -90 && angle <= 90) {
+      int realAngle = angle + 90; // δεξί servo κανονικά
+      servo1.write(realAngle);
     } 
-    else if (servoNum == 2 && angle >= 0 && angle <= 180) {
-      servo2.write(angle);
-      Serial.print("Servo2 moved to: ");
-      Serial.println(angle);
+    else if (servoNum == 2 && angle >= -90 && angle <= 90) {
+      int realAngle = 90 - angle; // αριστερό servo αντιστραμμένο
+      servo2.write(realAngle);
     }
+
 
     // Καθαρίζει το buffer για επόμενη είσοδο
     while (Serial.available()) Serial.read();
