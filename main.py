@@ -415,8 +415,8 @@ def smartbot_loop(visualizer, root):
             answer = answer.replace("R", "", 1)  # Αφαίρεσε το R
             ser.write(b"1 60\n")                 # Σήκωσε δεξί χέρι
             time.sleep(3)
-            ser.write(b"1 0\n"
-            
+            ser.write(b"1 0\n")
+
         elapsed = time.time() - start_time
         visualizer.stop_thinking()
         print(f"🤖 Απάντηση SSML:\n {answer}\n⏱️ Χρόνος απόκρισης: {elapsed:.2f} δευτερόλεπτα")
