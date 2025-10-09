@@ -188,12 +188,17 @@ class FaceVisualizer:
         self.left_eye = self._draw_soft_eye(w/2 - eye_x_offset, eye_y, eye_w, eye_h)
         self.right_eye = self._draw_soft_eye(w/2 + eye_x_offset, eye_y, eye_w, eye_h)
 
-        # Listening rings (ορατά μόνο όταν ακούει)
-        # self.listening_ring_left = self.canvas.create_oval(0, 0, 0, 0, outline="", width=2)
-        # self.listening_ring_right = self.canvas.create_oval(0, 0, 0, 0, outline="", width=2)
-
         # --- Στόμα ---
         self._create_mouth(w, h, size, open=False)
+
+        # --- Υπογραφή κάτω δεξιά ---
+        self.canvas.create_text(
+            w - 10, h - 10,
+            text="made by smartrep",
+            fill="#00A0A0",
+            font=("Arial", int(size * 0.04)),
+            anchor="se"
+        )
 
     def _draw_soft_eye(self, cx, cy, w, h):
         # Εξωτερικό glow (ήπιο, “μαλακό”)
@@ -236,6 +241,7 @@ class FaceVisualizer:
         self.animating = False
         self._redraw()
         self._set_eye_color(self.eye_color)
+
 
     def _animate_mouth(self, opening=True):
         if not self.animating:
