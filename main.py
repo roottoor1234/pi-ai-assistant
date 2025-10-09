@@ -433,7 +433,7 @@ def main():
     root.title("SmartBot Speaking")
     root.geometry("220x220")
     root.configure(bg="black")
-    # root.attributes("-fullscreen", True)  # πλήρης οθόνη
+    root.attributes("-fullscreen", True)  # πλήρης οθόνη
 
     visualizer = FaceVisualizer(root)
     threading.Thread(target=smartbot_loop, args=(visualizer, root), daemon=True).start()
