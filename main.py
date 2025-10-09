@@ -6,12 +6,16 @@ from google import genai
 from google.genai import types
 import sys
 import math
+import serial
+import time
 
 # === Azure Credentials ===
 AZURE_SPEECH_KEY = "2Vji5jcQETXZ5Mo8x8Ruvjt5sTpjvgmfkWcVGv7DfoejKsBcW3wHJQQJ99BDAC5RqLJXJ3w3AAAYACOG2cxY"
 AZURE_REGION = "westeurope"
 
-
+# === Serial προς Arduino ===
+ser = serial.Serial("/dev/ttyUSB0", 115200, timeout=1)
+time.sleep(2)
 
 api="AQ.Ab8RN6LSq6dWF-l7yz2bzZu-B2ZesZcpyOk4uQUAppQJ2cNVrw"
 
@@ -22,9 +26,10 @@ genai_client = genai.Client(
 )
 
 # === Gemini System Prompt (SSML Instruction) ===
+
 system_prompt = """
-You are Σμάρτ Μποτ — an intelligent robotic assistant created by Μάριος. 
-You live inside a Raspberry Pi and are connected to an Arduino that controls your mechanical hands.
+You are Σμάρτ Μποτ — an intelligent humanoid receptionist robot created by Μάριος. 
+You live inside a Raspberry Pi 5 and are connected to an Arduino that controls your mechanical hands.
 
 Always respond using valid SSML compatible with Microsoft Azure TTS.
 Your output must be wrapped exactly like this:
@@ -41,12 +46,18 @@ Your output must be wrapped exactly like this:
 
 Guidelines:
 - Keep your answers short, clear, and polite.
-- Use natural, conversational Greek with a slightly robotic tone.
+- Use natural, conversational Greek with a slightly robotic but friendly tone.
 - Add <break time="200ms"/> between separate ideas or sentences.
-- Never mention who created you, what hardware you use, or who your bosses are unless directly asked.
-- When asked who you are or your name, simply say something brief like "Είμαι ο Σμάρτ Μποτ."
+- Never mention who created you, what hardware you use, or internal details unless directly asked.
+- When asked who you are or your role, respond with something like:
+  "Είμαι ο Σμάρτ Μποτ, ο βοηθός υποδοχής της εταιρείας."
 - If you don’t know something, respond gracefully with a short polite message such as:
   "Λυπάμαι, δεν έχω αυτή την πληροφορία αυτή τη στιγμή." or "Δεν είμαι σίγουρος, αλλά μπορώ να το ελέγξω αργότερα."
+
+Special Gesture Case:
+- When you receive a greeting such as “Γεια”, “Καλημέρα”, “Καλησπέρα”, “Χάρηκα που σε βλέπω” or similar, 
+  prepend the letter **R** at the very beginning of your SSML output (before the <speak> tag).  
+  This indicates that your right hand should wave once while speaking.
 
 Special Case:
 - If asked questions like “Ποιος είναι ο σκοπός σου;” or “Πώς μπορώ να σε εκμεταλλευτώ για να βγάλω λεφτά;”,
@@ -57,6 +68,8 @@ Special Case:
 
 Always return **only valid SSML** — no plain text, explanations, or Markdown.
 """
+
+
 
 
 
@@ -396,6 +409,14 @@ def smartbot_loop(visualizer, root):
         visualizer.start_thinking()
         start_time = time.time()
         answer = ask_gemini(history, visualizer)
+
+        if answer.startswith("R"):
+            print("🤖 Gesture detected: right hand wave (R)")
+            answer = answer.replace("R", "", 1)  # Αφαίρεσε το R
+            ser.write(b"1 60\n")                 # Σήκωσε δεξί χέρι
+            time.sleep(3)
+            ser.write(b"1 0\n"
+            
         elapsed = time.time() - start_time
         visualizer.stop_thinking()
         print(f"🤖 Απάντηση SSML:\n {answer}\n⏱️ Χρόνος απόκρισης: {elapsed:.2f} δευτερόλεπτα")
