@@ -34,6 +34,14 @@ def smartbot_loop(visualizer, root):
             "χαίρομαι που σε βλέπω", "χαίρομαι που σε βλέπω!"
         ]
 
+        thanks = [
+            "ευχαριστώ", "ευχαριστώ πολύ", "ευχαριστώ!", "ευχαριστώ πολύ!"
+        ]
+
+        offices = [
+            "γραφείο πωλήσεων", "γραφείο υποστήριξης", "γραφείο διοίκησης"
+        ]
+
         if user_text in greetings:
             fixed_answer = (
                 "<speak version=\"1.0\" xmlns:mstts=\"https://www.w3.org/2001/mstts\" xml:lang=\"el-GR\">"
@@ -50,6 +58,41 @@ def smartbot_loop(visualizer, root):
             print("🤖 Fixed απάντηση (Καλημέρα):", fixed_answer)
             speak_with_azure_tts(fixed_answer, visualizer)
             wave_right_hand()
+            time.sleep(3)
+            continue  # ⛔ Μην μπαίνεις στο Gemini για χαιρετισμό
+
+        if user_text in thanks or any(thank in user_text for thank in thanks):
+            fixed_answer = (
+                "<speak version=\"1.0\" xmlns:mstts=\"https://www.w3.org/2001/mstts\" xml:lang=\"el-GR\">"
+                "<voice name=\"el-GR-NestorasNeural\">"
+                "<mstts:express-as style=\"chat\">"
+                "<prosody rate=\"0.85\" pitch=\"+2.2st\">"
+                "<break time=\"200ms\"/> Παρακαλώ, ελπίζω να σας βοήθησα. Καλή συνέχεια!"
+                "</prosody>"
+                "</mstts:express-as>"
+                "</voice>"
+                "</speak>"
+            )
+            print("🤖 Fixed απάντηση (Ευχαριστώ):", fixed_answer)
+            speak_with_azure_tts(fixed_answer, visualizer)
+            wave_right_hand()
+            time.sleep(3)
+            continue
+
+        if user_text in offices or any(office in user_text for office in offices):
+            fixed_answer = (
+                "<speak version=\"1.0\" xmlns:mstts=\"https://www.w3.org/2001/mstts\" xml:lang=\"el-GR\">"
+                "<voice name=\"el-GR-NestorasNeural\">"
+                "<mstts:express-as style=\"chat\">"
+                "<prosody rate=\"0.85\" pitch=\"+2.2st\">"
+                "Πρέπει να πάρετε το ασανσέρ από εκεί και να ανεβείτε στον τελευταίο όροφο."
+                "</prosody>"
+                "</mstts:express-as>"
+                "</voice>"
+                "</speak>"
+            )
+            speak_with_azure_tts(fixed_answer, visualizer)
+            wave_left_hand()
             time.sleep(3)
 
             continue  # ⛔ Μην μπαίνεις στο Gemini για χαιρετισμό
