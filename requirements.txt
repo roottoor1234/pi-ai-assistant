@@ -1,0 +1,4 @@
+azure-cognitiveservices-speech==1.45.0
+google-genai==1.42.0
+pyserial=3.5
+tk

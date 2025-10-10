@@ -14,7 +14,7 @@ AZURE_SPEECH_KEY = "2Vji5jcQETXZ5Mo8x8Ruvjt5sTpjvgmfkWcVGv7DfoejKsBcW3wHJQQJ99BD
 AZURE_REGION = "westeurope"
 
 # === Serial προς Arduino ===
-ser = serial.Serial("/dev/ttyUSB0", 115200, timeout=1)
+# ser = serial.Serial("/dev/ttyUSB0", 115200, timeout=1)
 time.sleep(2)
 
 api="AQ.Ab8RN6LSq6dWF-l7yz2bzZu-B2ZesZcpyOk4uQUAppQJ2cNVrw"
@@ -133,31 +133,52 @@ def ask_gemini(history, visualizer):
     return full_response.strip()
 
 # === Text-to-Speech ===
+# === Fast, Non-blocking Azure TTS ===
 def speak_with_azure_tts(ssml_text, visualizer):
-    speech_config = speechsdk.SpeechConfig(subscription=AZURE_SPEECH_KEY, region=AZURE_REGION)
-    audio_config = speechsdk.audio.AudioOutputConfig(use_default_speaker=True)
-    synthesizer = speechsdk.SpeechSynthesizer(speech_config=speech_config, audio_config=audio_config)
+    """
+    Παίζει SSML μέσω Azure TTS σε πραγματικό χρόνο, χωρίς να μπλοκάρει το πρόγραμμα.
+    Ξεκινάει άμεσα τη φωνή και διαχειρίζεται τα animations με thread.
+    """
 
-    # Όταν ξεκινήσει η σύνθεση → animation ON
-    def on_start(evt):
-        print("🔈 Έναρξη εκφώνησης")
-        visualizer.start_speaking()
+    def _speak():
+        try:
+            # ⚙️ Δημιουργία shared synthesizer μία φορά
+            global synthesizer
+            if "synthesizer" not in globals():
+                speech_config = speechsdk.SpeechConfig(subscription=AZURE_SPEECH_KEY, region=AZURE_REGION)
+                audio_config = speechsdk.audio.AudioOutputConfig(use_default_speaker=True)
+                synthesizer = speechsdk.SpeechSynthesizer(
+                    speech_config=speech_config,
+                    audio_config=audio_config
+                )
 
-    # Όταν ολοκληρωθεί → animation OFF
-    def on_end(evt):
-        print("✅ Τέλος εκφώνησης")
-        visualizer.stop_speaking()
+            # 🎧 Έναρξη εκφώνησης
+            visualizer.start_speaking()
+            print("🔈 [TTS] Μιλάει τώρα...")
 
-    synthesizer.synthesis_started.connect(on_start)
-    synthesizer.synthesis_completed.connect(on_end)
+            # 🗣️ Χρήση stream synthesis για μικρότερο latency
+            # Θα ξεκινήσει να παίζει ήχο καθώς κατεβαίνει από το Azure
+            result_future = synthesizer.speak_ssml_async(ssml_text)
 
-    result = synthesizer.speak_ssml_async(ssml_text).get()
+            # ✅ Δεν κάνουμε .get() εδώ — το αφήνουμε να τρέξει ασύγχρονα
+            def check_done():
+                result = result_future.get()
+                if result.reason == speechsdk.ResultReason.SynthesizingAudioCompleted:
+                    print("✅ [TTS] Τελείωσε η εκφώνηση.")
+                elif result.reason == speechsdk.ResultReason.Canceled:
+                    details = result.cancellation_details
+                    print("❌ [TTS] Ακυρώθηκε:", details.reason, "-", details.error_details)
+                visualizer.stop_speaking()
 
-    if result.reason == speechsdk.ResultReason.Canceled:
-        cancellation = result.cancellation_details
-        print("❌ Ακυρώθηκε:", cancellation.reason)
-        if cancellation.reason == speechsdk.CancellationReason.Error:
-            print("Σφάλμα:", cancellation.error_details)
+            threading.Thread(target=check_done, daemon=True).start()
+
+        except Exception as e:
+            print("⚠️ Σφάλμα στο Azure TTS:", e)
+            visualizer.stop_speaking()
+
+    # 🔁 Τρέχει σε δικό του thread — άμεση απόκριση
+    threading.Thread(target=_speak, daemon=True).start()
+
 
 
 # === Face Visualizer ===
@@ -402,31 +423,49 @@ def smartbot_loop(visualizer, root):
         print("📝 Ερώτηση:", query)
         if query.strip().lower() in ["τέλος", "τέλος.", "σταμάτα", "exit", "quit", "στοπ", "stop"]:
             print("👋 Αντίο!")
-            root.quit()   # κλείνει το GUI loop
+            root.quit()
             break
 
+        # === ΕΛΕΓΧΟΣ ΓΙΑ "ΚΑΛΗΜΕΡΑ" ===
+        print(f"Ερώτηση χρήστη: {query.strip().lower()}")
+        if query.strip().lower() in ["καλημέρα.", "καλημέρα!", "καλημέρα σας", "καλημέρα σας!", "γεια σου", "γεια σου!", "γεια σας", "γεια σας!", "χαίρομαι που σε βλέπω", "χαίρομαι που σε βλέπω!"]:
+            fixed_answer = (
+                "<speak version=\"1.0\" xmlns:mstts=\"https://www.w3.org/2001/mstts\" xml:lang=\"el-GR\">"
+                "<voice name=\"el-GR-NestorasNeural\">"
+                "<mstts:express-as style=\"chat\">"
+                "<prosody rate=\"0.85\" pitch=\"+2.2st\">"
+                "Καλημέρα! <break time=\"200ms\"/> Πως μπορώ να σας βοηθήσω;"
+                "</prosody>"
+                "</mstts:express-as>"
+                "</voice>"
+                "</speak>"
+            )
+            print("🤖 Fixed απάντηση (Καλημέρα):", fixed_answer)
+            # visualizer.start_speaking()
+            speak_with_azure_tts(fixed_answer, visualizer)
+            # visualizer.stop_speaking()
+            time.sleep(1)
+            continue  # ❌ μην μπαίνεις στο Gemini
+
+        # === Αν δεν είναι "Καλημέρα", πήγαινε κανονικά στο Gemini ===
         history.append(types.Content(role="user", parts=[types.Part.from_text(text=query)]))
         visualizer.start_thinking()
         start_time = time.time()
         answer = ask_gemini(history, visualizer)
 
-        if answer.startswith("R"):
-            print("🤖 Gesture detected: right hand wave (R)")
-            answer = answer.replace("R", "", 1)  # Αφαίρεσε το R
-            time.sleep(3)
-            ser.write(b"2 60\n")                 # Σήκωσε δεξί χέρι
-            time.sleep(3)
-            ser.write(b"2 0\n")
-
         elapsed = time.time() - start_time
         visualizer.stop_thinking()
         print(f"🤖 Απάντηση SSML:\n {answer}\n⏱️ Χρόνος απόκρισης: {elapsed:.2f} δευτερόλεπτα")
+
         history.append(types.Content(role="model", parts=[types.Part.from_text(text=answer)]))
 
         visualizer.start_speaking()
+        tts_start = time.time()
         speak_with_azure_tts(answer, visualizer)
+        print(f"🕒 Χρόνος TTS εκκίνησης: {time.time() - tts_start:.2f} sec")
         visualizer.stop_speaking()
         time.sleep(1)
+
 
 # === Main App Entry Point ===
 def main():
@@ -434,7 +473,7 @@ def main():
     root.title("SmartBot Speaking")
     root.geometry("220x220")
     root.configure(bg="black")
-    root.attributes("-fullscreen", True)  # πλήρης οθόνη
+    # root.attributes("-fullscreen", True)  # πλήρης οθόνη
 
     visualizer = FaceVisualizer(root)
     threading.Thread(target=smartbot_loop, args=(visualizer, root), daemon=True).start()
